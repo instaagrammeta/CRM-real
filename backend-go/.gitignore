@@ -1,0 +1,28 @@
+# Binaries
+bin/
+*.exe
+*.test
+*.out
+crm-server
+
+# Env files
+.env
+.env.local
+
+# Uploads
+uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Go
+vendor/

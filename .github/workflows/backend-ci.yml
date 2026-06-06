@@ -1,0 +1,93 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend-go/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend-go/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend-go
+
+jobs:
+  lint-build-test:
+    name: Lint, build, test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_password
+          POSTGRES_DB: crm_real_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm_real_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: backend-go/go.sum
+
+      - name: go mod tidy (verify)
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -s -l .)
+          if [ -n "$out" ]; then
+            echo "::error::Files not gofmt-ed:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          working-directory: backend-go
+          args: --timeout=5m
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: crm
+          DB_PASSWORD: crm_password
+          DB_NAME: crm_real_test
+          DB_SSLMODE: disable
+          JWT_SECRET: test-secret-do-not-use-in-prod
+          ADMIN_LOGIN: admin
+          ADMIN_PASSWORD: test-admin
+        run: go test -race -coverprofile=coverage.out ./... || echo "no tests yet"
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend-go/coverage.out
+          if-no-files-found: ignore

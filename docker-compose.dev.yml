@@ -1,0 +1,42 @@
+# =====================================================================
+# Development stack: only PostgreSQL (run backend & frontend locally).
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   cd backend-go && go run ./cmd/server
+#   cd frontend && npm run dev
+# =====================================================================
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: crm-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm_password
+      POSTGRES_DB: crm_real
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm_real"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional Adminer for browsing DB at http://localhost:8081
+  adminer:
+    image: adminer:4-standalone
+    container_name: crm-adminer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+volumes:
+  postgres_dev_data:

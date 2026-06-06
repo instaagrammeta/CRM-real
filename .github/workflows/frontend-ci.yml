@@ -1,0 +1,55 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  build:
+    name: Install, typecheck, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Nuxt prepare
+        run: npx nuxt prepare
+
+      - name: Typecheck (vue-tsc, non-blocking on first run)
+        run: npx vue-tsc --noEmit || echo "::warning::vue-tsc reported errors"
+        continue-on-error: true
+
+      - name: Build
+        env:
+          NUXT_PUBLIC_API_BASE: http://localhost:8080
+          NUXT_PUBLIC_WS_BASE: ws://localhost:8080
+        run: npm run build

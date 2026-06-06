@@ -1,0 +1,79 @@
+name: Docker compose smoke test
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'backend-go/**'
+      - 'frontend/**'
+      - 'nginx/**'
+      - '.github/workflows/docker-compose-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Stack boots & /healthz responds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: |
+          cat <<'EOF' > .env
+          DB_USER=crm
+          DB_PASSWORD=ci_password
+          DB_NAME=crm_real
+          JWT_SECRET=ci-jwt-secret-${{ github.run_id }}
+          ADMIN_LOGIN=admin
+          ADMIN_PASSWORD=ci-admin-pass
+          ADMIN_FULL_NAME=CI Admin
+          MAX_UPLOAD_MB=20
+          CORS_ORIGINS=*
+          PUBLIC_API_BASE=/
+          PUBLIC_WS_BASE=/
+          PUBLIC_HTTP_PORT=8080
+          EOF
+
+      - name: docker compose up -d --build
+        run: docker compose up -d --build --wait || true
+
+      - name: Wait for /healthz (up to 90s)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/healthz; then
+              echo "OK"
+              exit 0
+            fi
+            echo "waiting... ($i)"
+            sleep 3
+          done
+          echo "::error::Stack did not become healthy in time"
+          exit 1
+
+      - name: Verify login endpoint
+        run: |
+          curl -fsS -X POST http://localhost:8080/api/login \
+            -H 'Content-Type: application/json' \
+            -d '{"login":"admin","password":"ci-admin-pass"}' \
+            | grep -q '"success":true' \
+            && echo "login OK"
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "::group::postgres"
+          docker compose logs postgres
+          echo "::endgroup::"
+          echo "::group::backend"
+          docker compose logs backend
+          echo "::endgroup::"
+          echo "::group::frontend"
+          docker compose logs frontend
+          echo "::endgroup::"
+          echo "::group::nginx"
+          docker compose logs nginx
+          echo "::endgroup::"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
