@@ -1,0 +1,11 @@
+.git
+.gitignore
+.idea
+.vscode
+.nuxt
+.output
+node_modules
+*.log
+.env
+.env.local
+README.md
